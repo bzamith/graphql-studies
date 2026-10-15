@@ -1,0 +1,33 @@
+{
+  "name": "graphql-studies",
+  "version": "1.0.0",
+  "description": "A simple application for learning GraphQL, based on the PhotoShare project from *Introduction to GraphQL* by Eve Porcello and Alex Banks.",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon -e js,json,graphql src/server.js",
+    "seed": "node src/seed.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bzamith/graphql-studies.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/bzamith/graphql-studies/issues"
+  },
+  "homepage": "https://github.com/bzamith/graphql-studies#readme",
+  "dependencies": {
+    "@apollo/server": "^5.5.1",
+    "dotenv": "^18.0.8",
+    "graphql": "^16.14.2",
+    "graphql-custom-types": "^1.7.0",
+    "mongodb": "^7.7.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

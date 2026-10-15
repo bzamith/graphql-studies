@@ -1,0 +1,169 @@
+scalar DateTime
+
+enum PhotoCategory {
+    SELFIE
+    PORTRAIT
+    ACTION
+    LANDSCAPE
+    GRAPHIC
+}
+
+enum SortDirection {
+    ASCENDING
+    DESCENDING
+}
+
+enum SortablePhotoField {
+    NAME
+    DESCRIPTION
+    CATEGORY
+    CREATED
+}
+
+interface Profile {
+    name: String
+    avatar: String
+}
+
+input DateRange {
+    start: DateTime!
+    end: DateTime!
+}
+
+input DataPage {
+    first: Int = 25
+    start: Int = 0
+}
+
+input DataSort {
+    sort: SortDirection = DESCENDING
+    sortBy: SortablePhotoField = CREATED
+}
+
+input PhotoFilter {
+    category: PhotoCategory
+    createdBetween: DateRange
+    taggedUsers: [ID!]
+    searchText: String
+}
+
+"""
+The inputs sent with the postPhoto Mutation
+"""
+input PostPhotoInput {
+    "The name of the new photo"
+    name: String!
+    "(optional) A brief description of the photo"
+    description: String
+    "(optional) The category that defines the photo"
+    category: PhotoCategory! = PORTRAIT
+}
+
+type AuthPayload {
+    user: User!
+    token: String!
+}
+
+"""
+A user who has been authorized by GitHub at least once
+"""
+type User implements Profile {
+
+    """
+    The user's unique GitHub login
+    """
+    githubLogin: ID!
+
+    """
+    The user's first and last name
+    """
+    name: String
+
+    """
+    A url for the user's GitHub profile photo
+    """
+    avatar: String
+
+    """
+    All of the photos posted by this user
+    """
+    postedPhotos(
+        filter: PhotoFilter
+        paging: DataPage
+        sorting: DataSort
+    ): [Photo!]!
+
+    """
+    All of the photos in which this user appears
+    """
+    inPhotos(
+        filter: PhotoFilter
+        paging: DataPage
+        sorting: DataSort
+    ): [Photo!]!
+    friends: [Friendship!]!
+}
+
+type Photo {
+    id: ID!
+    name: String!
+    url: String!
+    description: String
+    created: DateTime!
+    category: PhotoCategory!
+    postedBy: User!
+    taggedUsers(sorting: DataSort): [User!]!
+}
+
+type Friendship {
+    friends: [User!]!
+    howLong: Int!
+    whereWeMet: Location
+}
+
+type Location {
+    city: String!
+    state: String!
+}
+
+union SearchResult = Photo | User
+
+type Query {
+    totalPhotos: Int!
+    allPhotos(
+        filter: PhotoFilter
+        paging: DataPage
+        sorting: DataSort
+    ): [Photo!]!
+    totalUsers: Int!
+    allUsers(
+        paging: DataPage
+        sorting: DataSort
+    ): [User!]!
+    allProfiles: [Profile!]!
+    search(term: String!): [SearchResult!]!
+    user(githubLogin: ID!): User!
+    photo(id: ID!): Photo!
+}
+
+type Mutation {
+    postPhoto(
+        "input: The name, description, and category for a new photo"
+        input: PostPhotoInput!
+    ): Photo!
+    """
+    Authorizes a GitHub user
+    """
+    githubAuth(code: String!): AuthPayload!
+}
+
+type Subscription {
+    newPhoto(category: PhotoCategory): Photo!
+    newUser: User!
+}
+
+schema {
+    query: Query
+    mutation: Mutation
+    subscription: Subscription
+}
