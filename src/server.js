@@ -5,6 +5,7 @@ const { startStandaloneServer } = require('@apollo/server/standalone');
 const { MongoClient } = require('mongodb');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { getCurrentUser } = require('./auth');
 const resolvers = require('./resolvers');
 
 const DB_HOST = process.env.DB_HOST;
@@ -25,7 +26,10 @@ async function startServer() {
   const server = new ApolloServer({ typeDefs, resolvers });
 
   const { url } = await startStandaloneServer(server, {
-    context: async () => ({ db: MONGO_DB }),
+    context: async ({ req }) => ({
+      db: MONGO_DB,
+      currentUser: await getCurrentUser(req, MONGO_DB),
+    }),
     listen: { port: 4000 },
   });
 

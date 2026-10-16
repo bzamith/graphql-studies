@@ -6,6 +6,7 @@
   "scripts": {
     "start": "nodemon -e js,json,graphql src/server.js",
     "seed": "node src/seed.js",
+    "auth:github": "node scripts/github-auth.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

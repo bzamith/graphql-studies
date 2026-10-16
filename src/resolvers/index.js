@@ -1,4 +1,5 @@
 const { GraphQLDateTime } = require('graphql-custom-types');
+const { authorizeWithGithub } = require('../auth');
 
 const MY_WEBSITE = 'https://bzamith.github.io';
 
@@ -32,14 +33,14 @@ async function getNextPhotoId(db) {
   return String(highestId + 1);
 }
 
-async function createPhoto(input, db) {
+async function createPhoto(input, db, currentUser) {
   const photo = {
     id: await getNextPhotoId(db),
     name: input.name,
     description: input.description ?? null,
     created: new Date(),
     category: input.category,
-    githubUser: 'photoshare-demo',
+    githubUser: currentUser.githubLogin,
   };
 
   await db.collection('photos').insertOne(photo);
@@ -83,16 +84,88 @@ async function getPhotosTaggedForUser(user, _args, { db }) {
   return db.collection('photos').find({ id: { $in: photoIds } }).toArray();
 }
 
+async function githubAuth(_parent, { code }, { db }) {
+  const { token, user } = await authorizeWithGithub(code);
+
+  await db.collection('users').updateOne(
+    { githubLogin: user.githubLogin },
+    { $set: user },
+    { upsert: true }
+  );
+
+  return { user, token };
+}
+
+async function fakeUserAuth(_parent, { githubLogin }, { db }) {
+  const user = await db.collection('users').findOne({ githubLogin });
+
+  if (!user) {
+    throw new Error(`Cannot find user with githubLogin "${githubLogin}".`);
+  }
+
+  if (!user.githubToken) {
+    throw new Error(`User "${githubLogin}" does not have a fake authentication token.`);
+  }
+
+  return { token: user.githubToken, user };
+}
+
+function postPhoto(_parent, { input }, { db, currentUser }) {
+  if (!currentUser) {
+    throw new Error('You must be signed in to post a photo.');
+  }
+
+  return createPhoto(input, db, currentUser);
+}
+
+async function addFakeUsers(_parent, { count = 1 }, { db }) {
+  const resultsCount = count ?? 1;
+
+  if (resultsCount < 0) {
+    throw new Error('count must be zero or greater.');
+  }
+
+  if (resultsCount === 0) {
+    return [];
+  }
+
+  const randomUserApi = `https://randomuser.me/api/?results=${resultsCount}`;
+  const response = await fetch(randomUserApi);
+
+  if (!response.ok) {
+    throw new Error('Could not fetch fake users.');
+  }
+
+  const { results } = await response.json();
+  if (!Array.isArray(results)) {
+    throw new Error('Random User API returned an invalid response.');
+  }
+
+  const fakeUsers = results.map(({ login, name, picture }) => ({
+    githubLogin: login.username,
+    githubToken: login.uuid,
+    name: `${name.first} ${name.last}`,
+    avatar: picture.thumbnail,
+  }));
+
+  await db.collection('users').insertMany(fakeUsers);
+  return fakeUsers;
+}
+
 const resolvers = {
   DateTime: GraphQLDateTime,
   Query: {
+    me: (_parent, _args, { currentUser }) => currentUser,
     totalPhotos: getTotalPhotos,
     allPhotos: getAllPhotos,
     totalUsers: getTotalUsers,
     allUsers: getAllUsers,
   },
   Mutation: {
-    postPhoto: (_parent, { input }, { db }) => createPhoto(input, db),
+    addFakeUsers,
+    fakeUserAuth,
+    postPhoto,
+    githubAuth,
   },
   Photo: {
     url: getPhotoUrl,

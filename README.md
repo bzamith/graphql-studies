@@ -1,87 +1,146 @@
 # PhotoShare
 
-A simple application for learning GraphQL, based on the PhotoShare project from *Introduction to GraphQL* by Eve Porcello and Alex Banks.
-
-The server will be built with Apollo Server. GraphQL Playground will be used as a separate client to explore the schema and send GraphQL operations during development.
+PhotoShare is a small learning project based on the application in *Introduction to GraphQL* by Eve Porcello and Alex Banks. It uses Apollo Server, GraphQL, and MongoDB to explore schemas, resolvers, queries, mutations, and GitHub OAuth.
 
 ## Requirements
 
-- macOS, Homebrew, Node.js, and npm
+- macOS 14 or later
+- Homebrew
+- Node.js and npm
 
-## Installation
+## Install
 
-From the project root, run:
+Run the setup script from the project root:
 
 ```bash
 ./scripts/install-dependencies.sh
 ```
 
-The script creates a `package.json` if one does not already exist, then installs the server dependencies.
+The script installs MongoDB Community 8.0 and the Node.js dependencies, starts MongoDB as a background service, and creates `.env` from `.env.example` if it does not exist. It does not install Node.js. Add your GitHub OAuth App credentials to `.env` before using GitHub authentication. The `.env` file is ignored by Git.
 
-## Dependencies
+### Install MongoDB manually
 
-- `@apollo/server` (version 5): GraphQL server.
-- `dotenv`: loads local environment variables from `.env`.
-- `graphql`: JavaScript implementation of the GraphQL specification.
-- `graphql-custom-types`: reusable custom scalars, including `DateTime`.
-- `mongodb`: official MongoDB Node.js driver.
-- `nodemon`: restarts the server when JavaScript, JSON, or GraphQL files change.
-
-## Local MongoDB
-
-Install MongoDB Community Edition with Homebrew. The MongoDB formula also installs `mongosh` and the MongoDB Database Tools, so no separate MongoDB-related Homebrew packages are needed.
-
-If the Xcode Command Line Tools are not installed, install them first:
-
-```bash
-xcode-select --install
-```
+Use these commands instead of the setup script if you want to install MongoDB yourself. The official MongoDB Homebrew tap also installs `mongosh` and the MongoDB Database Tools.
 
 ```bash
 brew tap mongodb/brew
 brew trust mongodb/brew
 brew update
 brew install mongodb-community@8.0
+brew services start mongodb-community@8.0
 ```
 
-Start MongoDB as a background service and connect with the shell:
+Check that MongoDB is responding:
 
 ```bash
-brew services start mongodb-community@8.0
-mongosh
+mongosh --eval 'db.runCommand({ ping: 1 })'
 ```
 
-Stop the service when you are done:
+To stop the background service:
 
 ```bash
 brew services stop mongodb-community@8.0
 ```
 
-Copy the example environment file before starting the API:
+If Homebrew requests the Xcode Command Line Tools, install them with `xcode-select --install`. MongoDB 8.0 requires macOS 14 or later. See the [official MongoDB macOS installation guide](https://www.mongodb.com/docs/v8.0/tutorial/install-mongodb-on-os-x/) and [Homebrew installation guide](https://brew.sh/).
+
+## Configure and run
+
+If `.env` was not created by the setup script, copy the example:
 
 ```bash
 cp .env.example .env
 ```
 
-`DB_HOST` should contain the MongoDB connection URI. The example points to the local `photoshare` database. Keep `.env` private; it is ignored by Git.
+Set `DB_HOST` to your MongoDB connection URI. The example uses the local `photoshare` database. Add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from your GitHub OAuth App to `.env`. Keep the client secret private; do not put it in browser requests or commit it.
 
-Load the sample users, photos, and tags with idempotent upserts, then start the API:
+Seed the sample users, photos, and tags, then start the server:
 
 ```bash
 npm run seed
 npm start
 ```
 
-The seed command updates or inserts only the sample records by their IDs; it does not clear the collections.
+The seed script uses upserts for the sample records, so rerunning it updates those records without clearing the collections. Open the URL printed by the server to use Apollo Sandbox. GraphQL Playground is a separate client and can be pointed at the same GraphQL endpoint; Apollo Server no longer bundles it.
 
-If Homebrew is not installed, follow the [Homebrew installation guide](https://brew.sh/). MongoDB 8.0 Community Edition requires macOS 14 or later.
+## GitHub OAuth
 
-> GraphQL Playground is a retired IDE and does not receive support or security updates. Apollo Server no longer bundles it; run Playground separately and connect it to your local GraphQL endpoint. Apollo Server provides Apollo Sandbox as its default browser landing page.
+With `GITHUB_CLIENT_ID` configured in `.env`, open GitHub's authorization page:
 
-## Running the application
+```bash
+npm run auth:github
+```
 
-Run `npm start` to start it with automatic restarts. Open the GraphQL endpoint URL in a browser to access Apollo Sandbox, or connect a separate GraphQL Playground client.
+Approve access in the browser. GitHub redirects to the callback URL configured for your OAuth App with a temporary `code` query parameter. Copy that code and run this mutation in GraphQL Playground, replacing `<RETURNED_BY_URL>` with its value:
 
-## Learning goals
+```graphql
+mutation {
+  githubAuth(code: "<RETURNED_BY_URL>") {
+    token
+    user {
+      githubLogin
+      name
+      avatar
+    }
+  }
+}
+```
 
-This repository follows the gradual development of PhotoShare to practice GraphQL concepts such as schemas, types, queries, mutations, and resolvers.
+Copy `data.githubAuth.token` from the result. In GraphQL Playground's **HTTP HEADERS** panel, add it for subsequent requests:
+
+```json
+{
+  "Authorization": "Bearer <TOKEN>"
+}
+```
+
+Replace `<TOKEN>` with the returned value. The server validates the token with GitHub and uses the associated user for the request context.
+
+With the header set, the `me` query returns the signed-in user, or `null` when no valid token is provided:
+
+```graphql
+query {
+  me {
+    githubLogin
+    name
+    avatar
+  }
+}
+```
+
+`postPhoto` also uses this current user as the photo's author and returns an error when the request is unauthenticated.
+
+For local testing, you can create fake users and authenticate as one of them:
+
+```graphql
+mutation {
+  addFakeUsers(count: 3) {
+    githubLogin
+    name
+  }
+}
+```
+
+Use one of the returned `githubLogin` values with `fakeUserAuth`, then put its returned token in the **HTTP HEADERS** panel using the same `Authorization: Bearer <TOKEN>` format. Fake-user tokens are for learning and local testing; they are not GitHub credentials.
+
+```graphql
+mutation {
+  fakeUserAuth(githubLogin: "<GITHUB_LOGIN>") {
+    token
+    user {
+      githubLogin
+      name
+      avatar
+    }
+  }
+}
+```
+
+## Dependencies
+
+- `@apollo/server`: GraphQL server.
+- `graphql`: GraphQL implementation for JavaScript.
+- `graphql-custom-types`: custom scalar types, including `DateTime`.
+- `mongodb`: official MongoDB Node.js driver.
+- `dotenv`: loads environment variables from `.env`.
+- `nodemon`: restarts the server when JavaScript, JSON, or GraphQL files change.

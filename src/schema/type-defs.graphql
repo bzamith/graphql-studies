@@ -129,6 +129,7 @@ type Location {
 union SearchResult = Photo | User
 
 type Query {
+    me: User
     totalPhotos: Int!
     allPhotos(
         filter: PhotoFilter
@@ -147,6 +148,8 @@ type Query {
 }
 
 type Mutation {
+    addFakeUsers(count: Int = 1): [User!]
+    fakeUserAuth(githubLogin: ID!): AuthPayload!
     postPhoto(
         "input: The name, description, and category for a new photo"
         input: PostPhotoInput!
